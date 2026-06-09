@@ -4,6 +4,7 @@ let uid = 1;
 
 const SAVE_KEY = "yosef_current";
 const HISTORY_KEY = "yosef_history";
+const WINS_KEY = "yosef_wins";
 const GOLD = "#c9a227";
 const DARK = "#1a1a1a";
 
@@ -33,6 +34,20 @@ function deleteFromHistory(id) {
     localStorage.setItem(HISTORY_KEY, JSON.stringify(h));
   } catch {}
 }
+function loadWins() {
+  try { return JSON.parse(localStorage.getItem(WINS_KEY)) || {}; } catch { return {}; }
+}
+function recordWin(name) {
+  try {
+    const w = loadWins();
+    const key = name.trim().toLowerCase();
+    w[key] = (w[key] || 0) + 1;
+    localStorage.setItem(WINS_KEY, JSON.stringify(w));
+  } catch {}
+}
+function clearWins() {
+  try { localStorage.removeItem(WINS_KEY); } catch {}
+}
 
 // ── win probability ───────────────────────────────────────────────────────────
 
@@ -60,6 +75,9 @@ export default function App() {
   const [showHistory, setShowHistory] = useState(false);
   const [expandedGame, setExpandedGame] = useState(null);
   const [flashSaved, setFlashSaved] = useState(false);
+  const [wins, setWins] = useState({});
+  const [showAllTime, setShowAllTime] = useState(false);
+  const [confirmClearWins, setConfirmClearWins] = useState(false);
 
   const autoSavedRef = useRef(false);
   const loadingRef = useRef(true);
@@ -75,6 +93,7 @@ export default function App() {
       uid = Math.max(1, ...saved.players.map(p => p.id)) + 1;
     }
     setHistory(loadHistory());
+    setWins(loadWins());
     loadingRef.current = false;
   }, []);
 
@@ -91,13 +110,17 @@ export default function App() {
     saveCurrent({ players, scores, round, gameName });
   }, [players, scores, round, gameName]);
 
-  // ── auto-save to history when game ends ──
+  // ── auto-save to history + record win when game ends ──
   useEffect(() => {
     if (!gameOver || players.length === 0 || autoSavedRef.current) return;
     autoSavedRef.current = true;
     const entry = buildHistoryEntry(players, round, gameName, winner, false);
     pushHistory(entry);
     setHistory(loadHistory());
+    if (winner) {
+      recordWin(winner.name);
+      setWins(loadWins());
+    }
     clearCurrent();
   }, [gameOver]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -161,6 +184,7 @@ export default function App() {
   const reset = () => {
     setPlayers([]); setScores({}); setRound(1); setInput("");
     setGameName(""); setShowNameEdit(false);
+    setConfirmClearWins(false);
     autoSavedRef.current = false;
     clearCurrent();
   };
@@ -340,12 +364,67 @@ export default function App() {
           {!gameOver && <Btn onClick={reset} style={{ borderColor: "#3a1a1a", color: "#7a3a3a" }}>Reset</Btn>}
 
           <Btn
+            onClick={() => { setShowAllTime(h => !h); setWins(loadWins()); }}
+            style={{ marginLeft: "auto", borderColor: showAllTime ? GOLD : "#222", color: showAllTime ? GOLD : "#555" }}
+          >
+            All-Time
+          </Btn>
+          <Btn
             onClick={() => { setShowHistory(h => !h); setHistory(loadHistory()); }}
-            style={{ marginLeft: "auto", borderColor: showHistory ? GOLD : "#222", color: showHistory ? GOLD : "#555" }}
+            style={{ borderColor: showHistory ? GOLD : "#222", color: showHistory ? GOLD : "#555" }}
           >
             History{history.length > 0 ? ` (${history.length})` : ""}
           </Btn>
         </div>
+
+        {/* All-Time wins panel */}
+        {showAllTime && (() => {
+          const entries = Object.entries(wins)
+            .map(([key, w]) => ({ key, display: key, wins: w }))
+            .sort((a, b) => b.wins - a.wins);
+          const max = entries[0]?.wins || 1;
+          return (
+            <div style={{ background: "#0d0d0d", border: "1px solid #1a1a1a", padding: 14, marginBottom: 18, animation: "fadeIn 0.2s ease" }}>
+              <div style={{ display: "flex", alignItems: "center", marginBottom: 12 }}>
+                <div style={{ fontSize: 9, letterSpacing: 3, textTransform: "uppercase", color: GOLD, fontWeight: 700, flex: 1 }}>
+                  All-Time Wins
+                </div>
+                {entries.length > 0 && !confirmClearWins && (
+                  <button
+                    onClick={() => setConfirmClearWins(true)}
+                    style={{ background: "none", border: "none", color: "#333", fontFamily: "monospace", fontSize: 9, letterSpacing: 1, textTransform: "uppercase", cursor: "pointer" }}
+                  >
+                    Clear
+                  </button>
+                )}
+                {confirmClearWins && (
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <span style={{ fontSize: 9, color: "#666", letterSpacing: 1 }}>Sure?</span>
+                    <button onClick={() => { clearWins(); setWins({}); setConfirmClearWins(false); }} style={{ background: "none", border: "none", color: "#c04040", fontFamily: "monospace", fontSize: 9, letterSpacing: 1, textTransform: "uppercase", cursor: "pointer" }}>Yes</button>
+                    <button onClick={() => setConfirmClearWins(false)} style={{ background: "none", border: "none", color: "#555", fontFamily: "monospace", fontSize: 9, letterSpacing: 1, textTransform: "uppercase", cursor: "pointer" }}>No</button>
+                  </div>
+                )}
+              </div>
+
+              {entries.length === 0 ? (
+                <div style={{ color: "#333", fontSize: 10, textAlign: "center", padding: "16px 0", letterSpacing: 2 }}>No wins recorded yet</div>
+              ) : entries.map((e, i) => (
+                <div key={e.key} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 9 }}>
+                  <span style={{ color: i === 0 ? GOLD : "#2a2a2a", width: 14, fontSize: 10, flexShrink: 0 }}>{i + 1}</span>
+                  <span style={{ width: 110, fontSize: 11, textTransform: "uppercase", letterSpacing: 1, color: i === 0 ? GOLD : "#888", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flexShrink: 0 }}>
+                    {e.display}
+                  </span>
+                  <div style={{ flex: 1, height: 3, background: "#1a1a1a" }}>
+                    <div style={{ height: "100%", width: `${Math.round((e.wins / max) * 100)}%`, background: i === 0 ? GOLD : "#3a3a3a", transition: "width 0.4s" }} />
+                  </div>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: i === 0 ? GOLD : "#666", width: 24, textAlign: "right", flexShrink: 0 }}>
+                    {e.wins}
+                  </span>
+                </div>
+              ))}
+            </div>
+          );
+        })()}
 
         {/* History panel — full width */}
         {showHistory && (
