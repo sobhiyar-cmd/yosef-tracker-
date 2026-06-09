@@ -182,6 +182,22 @@ export default function App() {
     if (expandedGame === id) setExpandedGame(null);
   };
 
+  const resumeGame = async g => {
+    uid = 1;
+    const restored = g.players.map((p, i) => ({ id: i + 1, name: p.name, total: p.score, out: p.out }));
+    uid = restored.length + 1;
+    setPlayers(restored);
+    setScores({});
+    setRound(g.rounds + 1);
+    setGameName(g.gameName || "");
+    setShowHistory(false);
+    setExpandedGame(null);
+    autoSavedRef.current = false;
+    await removeHistory(g.id);
+    setHistory(h => h.filter(e => e.id !== g.id));
+    clearCurrent();
+  };
+
   // ── sorted views ──
   const sorted = [...players].sort((a, b) => {
     if (a.out !== b.out) return a.out ? 1 : -1;
@@ -382,6 +398,14 @@ export default function App() {
                         {g.date} · {g.rounds} round{g.rounds !== 1 ? "s" : ""} · {g.players.map(p => p.name).join(", ")}
                       </div>
                     </div>
+                    {g.incomplete && (
+                      <button
+                        onClick={e => { e.stopPropagation(); resumeGame(g); }}
+                        style={{ background: "transparent", border: "1px solid #1e3a1e", color: "#4a8a4a", fontFamily: "monospace", fontSize: 9, letterSpacing: 1, textTransform: "uppercase", padding: "3px 8px", flexShrink: 0 }}
+                      >
+                        Resume →
+                      </button>
+                    )}
                     <span style={{ color: "#2a2a2a", fontSize: 10, flexShrink: 0 }}>{isOpen ? "▲" : "▼"}</span>
                     <button onClick={e => { e.stopPropagation(); deleteHistoryEntry(g.id); }} style={{ background: "none", border: "none", color: "#2a2a2a", fontSize: 15, padding: "0 4px", flexShrink: 0 }}>×</button>
                   </div>
