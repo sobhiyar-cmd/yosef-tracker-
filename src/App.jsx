@@ -80,7 +80,8 @@ export default function App() {
 
   // ── derived state ──
   const active = players.filter(p => !p.out);
-  const gameOver = players.length > 0 && active.length <= 1;
+  const eliminated = players.filter(p => p.out);
+  const gameOver = players.length > 1 && eliminated.length > 0 && active.length <= 1;
   const winner = gameOver ? active[0] ?? null : null;
 
   // ── auto-save current game state ──
